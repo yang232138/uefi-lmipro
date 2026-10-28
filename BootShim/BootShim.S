@@ -7,9 +7,9 @@ _StackBase:
   .quad FD_BASE         /* Text Offset */
 
 _StackSize:
-  /* Image size as the ARM64 header defines it: this shim plus the volume it carries.
-     unixnu bootimg checks this field against shim length + FD_SIZE. */
-  .quad FD_SIZE + (_Payload - _Head)
+  /* Keep the upstream semantics: the ABL on this board rejects a header whose
+     image_size includes the shim (Load Error), so this stays the bare volume size. */
+  .quad FD_SIZE
   .quad 0               /* Flags */
   .quad 0               /* Reserved */
   .quad 0               /* Reserved */
