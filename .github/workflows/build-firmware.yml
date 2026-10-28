@@ -104,6 +104,18 @@ jobs:
               s = s.replace(old, "pass  # the device tree is appended to the kernel field")
               p.write_text(s)
               print('patched mkbootimg: empty dtb allowed because it is appended to the kernel')
+
+          # The lmi ABL rejects a boot image whose ARM64 image_size counts the shim
+          # (Load Error), so BootShim keeps the bare FD_SIZE. unixnu insists on
+          # shim + FD_SIZE; accept either value.
+          b = Path('unixnu/scripts/unixnu/bootimg.py')
+          t = b.read_text()
+          old = "or struct.unpack_from('<QQ', shim, 8) != (base, len(shim) + size)"
+          new = ("or struct.unpack_from('<QQ', shim, 8)[0] != base "
+                 "or struct.unpack_from('<QQ', shim, 8)[1] not in (size, len(shim) + size)")
+          if old in t:
+              b.write_text(t.replace(old, new))
+              print('patched unixnu bootimg: image_size may be the volume size alone')
           PY
 
       - name: Resolve the device configuration
