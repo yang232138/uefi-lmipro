@@ -1,0 +1,107 @@
+name: Build firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      mu_silicium_ref:
+        description: Mu-Silicium commit to build against
+        required: true
+        default: e51cd877e31c8fbb322032dc4cb6715e83d25ad3
+      device_repository:
+        description: Device repository as owner/name
+        required: true
+        default: yang232138/lmipro
+      device_ref:
+        description: Device repository ref
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  firmware:
+    # EDK II builds on Linux with clang + lld; the kernel step needs macOS, so this
+    # job only produces the firmware volume.
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MU_REF: ${{ inputs.mu_silicium_ref }}
+      DEVICE_REPO: ${{ inputs.device_repository }}
+      DEVICE_REF: ${{ inputs.device_ref }}
+    steps:
+      - name: Check out UniXNU
+        uses: actions/checkout@v4
+        with:
+          repository: yang232138/UniXNU
+          path: unixnu
+
+      - name: Check out the device repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.device_repository }}
+          ref: ${{ inputs.device_ref }}
+          path: lmipro
+
+      - name: Check out this overlay
+        uses: actions/checkout@v4
+        with:
+          path: overlay
+
+      - name: Fetch Mu-Silicium at the pinned commit
+        run: |
+          mkdir uefi && cd uefi
+          git init -q
+          git remote add origin https://github.com/Project-Silicium/Mu-Silicium.git
+          git fetch -q --depth 1 origin "$MU_REF"
+          git checkout -q FETCH_HEAD
+          # Binaries is provided by this overlay, so it is deliberately left out.
+          git submodule update --init --depth 1 \
+            Mu_Basecore Common/Mu Common/Mu_OEM_Sample \
+            Silicon/Silicium/OpensslPkg/Library/OpensslLib/openssl \
+            Silicium-ACPI || true
+
+      - name: Install the EDK II host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang lld llvm nasm uuid-dev python3 python3-pip acpica-tools device-tree-compiler
+          sudo python3 -m pip install --break-system-packages -r uefi/pip-requirements.txt || true
+
+      - name: Add the lmi board overlay and its binaries
+        run: |
+          cp -a overlay/Platforms/. uefi/Platforms/
+          cp -a overlay/BootShim/. uefi/BootShim/
+          cp -a overlay/Resources/. uefi/Resources/
+          mkdir -p uefi/Binaries
+          rm -rf uefi/Binaries/lmi
+          unzip -q overlay/Binaries-lmi.zip -d uefi/Binaries
+          test -f uefi/Platforms/Xiaomi/lmiPkg/lmi.dsc
+          test -f uefi/Binaries/lmi/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
+
+      - name: Resolve the device configuration
+        run: |
+          cd unixnu
+          ./unixnu defconfig lmipro_defconfig -D ../lmipro
+          ./unixnu fetch -D ../lmipro
+          ./unixnu status -D ../lmipro
+
+      - name: Build the firmware volume
+        run: |
+          cd unixnu
+          ./unixnu build firmware -D ../lmipro --uefi ../uefi
+
+      - name: Upload the firmware volume
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SILICIUM_UEFI
+          path: |
+            uefi/Build/lmiPkg/**/FV/*.fd
+            uefi/Build/lmiPkg/**/*.log
+          if-no-files-found: warn
+          retention-days: 14
