@@ -35,17 +35,10 @@ jobs:
       DEVICE_REF: ${{ inputs.device_ref }}
     steps:
       - name: Check out UniXNU
-        uses: actions/checkout@v4
-        with:
-          repository: yang232138/UniXNU
-          path: unixnu
+        run: git clone --depth 1 https://github.com/yang232138/UniXNU unixnu
 
       - name: Check out the device repository
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.device_repository }}
-          ref: ${{ inputs.device_ref }}
-          path: lmipro
+        run: git clone --depth 1 --branch "$DEVICE_REF" "https://github.com/$DEVICE_REPO" lmipro
 
       - name: Check out this overlay
         uses: actions/checkout@v4
