@@ -84,6 +84,7 @@
   #
   HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
   FdtLib|MdePkg/Library/BaseFdtLib/BaseFdtLib.inf
+  UniXNULib|UniXNUPkg/Library/UniXNULib/UniXNULib.inf
 
 #
 # UniXNU modules. The paths resolve through the firmware PACKAGES_PATH entries:
