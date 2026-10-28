@@ -58,6 +58,17 @@ jobs:
             Silicon/Silicium/OpensslPkg/Library/OpensslLib/openssl \
             Silicium-ACPI || true
 
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract the lmi vendor DXE set from the handset XBL
+        run: |
+          git clone --depth 1 https://github.com/MSMTools/UEFIReader uefi-reader
+          dotnet run --project uefi-reader/UEFIReader -- overlay/inputs/xbl_4.elf extracted
+          echo "== extracted tree (top) =="
+          find extracted -maxdepth 3 -type d | head -30
+
       - name: Install the EDK II host tools
         run: |
           sudo apt-get update
@@ -72,7 +83,14 @@ jobs:
           cp -a overlay/Resources/. uefi/Resources/
           mkdir -p uefi/Binaries
           rm -rf uefi/Binaries/lmi
-          unzip -q overlay/Binaries-lmi.zip -d uefi/Binaries
+          # The DXE modules come from the handset's own XBL, extracted above. The
+          # alioth zip is retired: its board data is SM8250-AC, not lmi's SM8250.
+          qcom=$(find extracted -type d -path '*/QcomPkg/Drivers' | head -1)
+          if [ -z "$qcom" ]; then echo "no QcomPkg under extracted/"; find extracted -maxdepth 4 -type d | head -40; exit 1; fi
+          vendor_root=$(dirname "$(dirname "$qcom")")
+          echo "vendor root: $vendor_root"
+          mkdir -p uefi/Binaries/lmi
+          cp -a "$vendor_root"/. uefi/Binaries/lmi/
           test -f uefi/Platforms/Xiaomi/lmiPkg/lmi.dsc
           test -f uefi/Binaries/lmi/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
           # unixnu bootimg appends the device tree to the kernel field instead of
