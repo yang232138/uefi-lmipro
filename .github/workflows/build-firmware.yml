@@ -75,6 +75,18 @@ jobs:
           unzip -q overlay/Binaries-lmi.zip -d uefi/Binaries
           test -f uefi/Platforms/Xiaomi/lmiPkg/lmi.dsc
           test -f uefi/Binaries/lmi/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
+          # unixnu bootimg appends the device tree to the kernel field instead of
+          # passing --dtb, but this mkbootimg requires a non-empty dtb for header v2.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('uefi/Resources/Scripts/mkbootimg.py')
+          s = p.read_text()
+          old = "raise ValueError('DTB image must not be empty.')"
+          if old in s:
+              s = s.replace(old, "pass  # the device tree is appended to the kernel field")
+              p.write_text(s)
+              print('patched mkbootimg: empty dtb allowed because it is appended to the kernel')
+          PY
 
       - name: Resolve the device configuration
         run: |
